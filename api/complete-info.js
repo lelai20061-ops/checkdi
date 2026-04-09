@@ -1,7 +1,8 @@
-const PROFILE_API = process.env.FF_PROFILE_API || 'http://raw.sukhdaku.qzz.io/player/info';
+const ACCINFO_API = 'https://danger-player-info.vercel.app/accinfo';
+const API_KEY = process.env.DANGER_API_KEY || 'DANGERxINFO';
 
 function validUid(uid) {
-  return /^\d{6,20}$/.test(String(uid || ''));
+  return /^\d{6,20}$/.test(String(uid || '').trim());
 }
 
 function get(obj, path) {
@@ -16,14 +17,9 @@ function pick(obj, paths, fallback = null) {
   return fallback;
 }
 
-function normalizeProfilePayload(json) {
-  if (!json || typeof json !== 'object') return {};
-  if (json.data && typeof json.data === 'object') return json.data;
-  return json;
-}
-
-async function fetchJson(url) {
+async function fetchText(url) {
   const response = await fetch(url, {
+    method: 'GET',
     headers: {
       accept: 'application/json,text/plain,*/*',
       'user-agent': 'Mozilla/5.0'
@@ -31,89 +27,126 @@ async function fetchJson(url) {
   });
 
   const text = await response.text();
-  if (!response.ok) {
-    throw new Error(`Profile upstream HTTP ${response.status}: ${text.slice(0, 200)}`);
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    text
+  };
+}
+
+function normalizeToExpectedShape(uid, raw) {
+  if (raw?.status === 'success' && raw?.data) {
+    return {
+      status: 'success',
+      region: raw.region || raw?.data?.basicInfo?.region || null,
+      data: raw.data,
+      outfit_image:
+        raw.outfit_image ||
+        raw.outfitImage ||
+        raw?.data?.outfit_image ||
+        raw?.data?.outfitImage ||
+        null
+    };
   }
 
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error('Profile upstream did not return JSON.');
+  if (raw?.basicInfo || raw?.profileInfo || raw?.socialInfo) {
+    return {
+      status: 'success',
+      region: raw?.basicInfo?.region || null,
+      data: raw,
+      outfit_image: raw.outfit_image || raw.outfitImage || null
+    };
   }
+
+  if (raw?.data && (raw.data.basicInfo || raw.data.profileInfo || raw.data.socialInfo)) {
+    return {
+      status: 'success',
+      region: raw?.data?.basicInfo?.region || null,
+      data: raw.data,
+      outfit_image:
+        raw.outfit_image ||
+        raw.outfitImage ||
+        raw?.data?.outfit_image ||
+        raw?.data?.outfitImage ||
+        null
+    };
+  }
+
+  return {
+    status: 'success',
+    region: raw?.region || null,
+    data: {
+      basicInfo: {
+        accountId: String(raw?.uid || raw?.accountId || uid),
+        nickname: pick(raw, ['nickname', 'playerName', 'name'], 'Unknown'),
+        region: pick(raw, ['region', 'serverRegion'], 'Unknown'),
+        level: Number(pick(raw, ['level', 'lvl'], 0)) || 0,
+        liked: Number(pick(raw, ['liked', 'likes'], 0)) || 0,
+        exp: Number(pick(raw, ['exp'], 0)) || 0,
+        rankingPoints: Number(pick(raw, ['rankingPoints', 'rankPoints'], 0)) || 0,
+        csRankingPoints: Number(pick(raw, ['csRankingPoints', 'csRankPoints'], 0)) || 0,
+        createAt: Number(pick(raw, ['createAt'], 0)) || 0,
+        lastLoginAt: Number(pick(raw, ['lastLoginAt'], 0)) || 0
+      },
+      profileInfo: raw?.profileInfo || {},
+      socialInfo: {
+        signature: pick(raw, ['signature', 'bio', 'socialInfo.signature'], '')
+      },
+      clanBasicInfo: raw?.clanBasicInfo || {},
+      captainBasicInfo: raw?.captainBasicInfo || {},
+      petInfo: raw?.petInfo || {},
+      creditScoreInfo: raw?.creditScoreInfo || { creditScore: 100 }
+    },
+    outfit_image:
+      raw?.outfit_image ||
+      raw?.outfitImage ||
+      raw?.image ||
+      raw?.imageBase64 ||
+      null
+  };
 }
 
 module.exports = async function handler(req, res) {
   try {
     const uid = String(req.query?.uid || '').trim();
-    const bg = String(req.query?.bg || '1');
 
     if (!validUid(uid)) {
-      return res.status(400).json({ status: 'error', message: 'UID must be 6-20 digits.' });
+      return res.status(400).json({
+        status: 'error',
+        message: 'UID must be 6-20 digits.'
+      });
     }
 
-    const json = await fetchJson(`${PROFILE_API}?uid=${encodeURIComponent(uid)}`);
-    const src = normalizeProfilePayload(json);
+    const url = `${ACCINFO_API}?uid=${encodeURIComponent(uid)}&key=${encodeURIComponent(API_KEY)}`;
+    const upstream = await fetchText(url);
 
-    const basicInfo = {
-      accountId: uid,
-      nickname: pick(src, ['profileInfo.nickname', 'basicInfo.nickname', 'playerData.nickname', 'nickname'], 'Unknown'),
-      region: pick(src, ['basicInfo.region', 'playerData.region', 'profileInfo.region', 'region'], 'Unknown'),
-      level: Number(pick(src, ['profileInfo.level', 'basicInfo.level', 'playerData.level'], 0)) || 0,
-      liked: Number(pick(src, ['basicInfo.liked', 'profileInfo.likes', 'socialInfo.likes'], 0)) || 0,
-      exp: Number(pick(src, ['basicInfo.exp', 'profileInfo.exp', 'playerData.exp'], 0)) || 0,
-      rankingPoints: Number(pick(src, ['basicInfo.rankingPoints', 'profileInfo.rankingPoints', 'profileInfo.rankPoints'], 0)) || 0,
-      csRankingPoints: Number(pick(src, ['basicInfo.csRankingPoints', 'profileInfo.csRankingPoints', 'profileInfo.csRankPoints'], 0)) || 0,
-      createAt: Number(pick(src, ['basicInfo.createAt', 'profileInfo.createAt', 'playerData.createAt'], 0)) || 0,
-      lastLoginAt: Number(pick(src, ['basicInfo.lastLoginAt', 'profileInfo.lastLoginAt', 'playerData.lastLoginAt'], 0)) || 0
-    };
+    if (!upstream.ok) {
+      return res.status(upstream.status === 404 ? 404 : 502).json({
+        status: 'error',
+        message: `Upstream HTTP ${upstream.status}`,
+        raw: upstream.text.slice(0, 500)
+      });
+    }
 
-    const socialInfo = {
-      signature: pick(src, ['socialInfo.signature', 'profileInfo.signature', 'signature'], '')
-    };
+    let raw;
+    try {
+      raw = JSON.parse(upstream.text);
+    } catch {
+      return res.status(502).json({
+        status: 'error',
+        message: 'Upstream did not return JSON.',
+        raw: upstream.text.slice(0, 500)
+      });
+    }
 
-    const petInfo = {
-      id: pick(src, ['petInfo.id', 'petInfo.petId'], null),
-      level: Number(pick(src, ['petInfo.level', 'petInfo.petLevel'], 0)) || 0,
-      name: pick(src, ['petInfo.name', 'petInfo.petName'], '')
-    };
-
-    const clanBasicInfo = {
-      clanName: pick(src, ['clanBasicInfo.clanName', 'guildInfo.name', 'guildInfo.guildName'], ''),
-      clanId: pick(src, ['clanBasicInfo.clanId', 'guildInfo.id', 'guildInfo.guildId'], ''),
-      clanLevel: Number(pick(src, ['clanBasicInfo.clanLevel', 'guildInfo.level'], 0)) || 0,
-      memberNum: Number(pick(src, ['clanBasicInfo.memberNum', 'guildInfo.memberNum'], 0)) || 0,
-      capacity: Number(pick(src, ['clanBasicInfo.capacity', 'guildInfo.capacity'], 0)) || 0
-    };
-
-    const captainBasicInfo = {
-      nickname: pick(src, ['captainBasicInfo.nickname', 'guildInfo.captainName'], ''),
-      accountId: pick(src, ['captainBasicInfo.accountId', 'guildInfo.captainId'], ''),
-      level: Number(pick(src, ['captainBasicInfo.level', 'guildInfo.captainLevel'], 0)) || 0,
-      rankingPoints: Number(pick(src, ['captainBasicInfo.rankingPoints'], 0)) || 0,
-      csRankingPoints: Number(pick(src, ['captainBasicInfo.csRankingPoints'], 0)) || 0
-    };
-
-    const creditScoreInfo = {
-      creditScore: Number(pick(src, ['creditScoreInfo.creditScore', 'basicInfo.creditScore'], 100)) || 100
-    };
-
-    return res.status(200).json({
-      status: 'success',
-      region: basicInfo.region,
-      data: {
-        basicInfo,
-        profileInfo: src.profileInfo || {},
-        socialInfo,
-        clanBasicInfo,
-        captainBasicInfo,
-        petInfo,
-        creditScoreInfo,
-        playerData: src.playerData || {}
-      },
-      outfit_image_url: `/api/outfit-image?uid=${encodeURIComponent(uid)}&bg=${encodeURIComponent(bg)}`
-    });
+    return res.status(200).json(normalizeToExpectedShape(uid, raw));
   } catch (error) {
     console.error('complete-info.js fatal error:', error);
-    return res.status(500).json({ status: 'error', message: error.message || 'Failed to fetch account info.' });
+
+    return res.status(500).json({
+      status: 'error',
+      message: error.message || 'Failed to fetch account info.'
+    });
   }
 };
