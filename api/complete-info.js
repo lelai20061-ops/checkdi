@@ -1,127 +1,119 @@
-function mockAccount(uid, bg = '1') {
-  const regions = ['VN', 'SG', 'TH', 'ID', 'BR', 'US'];
-  const region = regions[Number(String(uid).slice(-1)) % regions.length] || 'VN';
-  const level = 10 + (Number(String(uid).slice(-2)) % 70);
-  const likes = 500 + (Number(String(uid).slice(-3)) % 9000);
-  const exp = level * 15320;
-  const rankingPoints = 1200 + (Number(String(uid).slice(-3)) % 6000);
-  const csRankingPoints = Number(String(uid).slice(-2)) % 120;
-
-  return {
-    status: 'success',
-    data: {
-      basicInfo: {
-        accountId: uid,
-        nickname: `Player_${String(uid).slice(-6)}`,
-        region,
-        level,
-        liked: likes,
-        exp,
-        rankingPoints,
-        csRankingPoints,
-        createAt: 1704067200,
-        lastLoginAt: Math.floor(Date.now() / 1000) - 3600
-      },
-      socialInfo: {
-        signature: 'Demo signature from safe local backend.'
-      },
-      clanBasicInfo: {
-        clanName: 'Demo Guild',
-        clanId: 'GUILD-' + String(uid).slice(-5),
-        clanLevel: 4,
-        memberNum: 37,
-        capacity: 50
-      },
-      petInfo: {
-        level: 5
-      },
-      creditScoreInfo: {
-        creditScore: 100
-      },
-      captainBasicInfo: {
-        nickname: 'GuildLeader',
-        accountId: '9' + String(uid).slice(-8),
-        level: 65,
-        rankingPoints: 5200,
-        csRankingPoints: 89
-      }
-    },
-    outfit_image: generateSvgOutfitBase64(bg, uid)
-  };
-}
-
-function generateSvgOutfitBase64(bg, uid) {
-  const palette = {
-    '1': ['#3b0a0a', '#ff4444', '#ffbf69'],
-    '2': ['#082b12', '#28a745', '#97f9a9'],
-    '3': ['#061b3a', '#007bff', '#7fdbff']
-  };
-  const [bg1, bg2, accent] = palette[bg] || palette['1'];
-
-  const svg = `
-  <svg xmlns="http://www.w3.org/2000/svg" width="700" height="900" viewBox="0 0 700 900">
-    <defs>
-      <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="${bg1}"/>
-        <stop offset="100%" stop-color="${bg2}"/>
-      </linearGradient>
-    </defs>
-    <rect width="700" height="900" fill="url(#g)"/>
-    <circle cx="350" cy="190" r="85" fill="#f1c27d"/>
-    <rect x="270" y="285" width="160" height="220" rx="26" fill="#121212"/>
-    <rect x="225" y="315" width="50" height="180" rx="20" fill="#f1c27d"/>
-    <rect x="425" y="315" width="50" height="180" rx="20" fill="#f1c27d"/>
-    <rect x="285" y="505" width="45" height="220" rx="16" fill="#222"/>
-    <rect x="370" y="505" width="45" height="220" rx="16" fill="#222"/>
-    <rect x="255" y="310" width="190" height="50" rx="16" fill="${accent}" opacity="0.9"/>
-    <text x="350" y="80" font-size="42" font-family="Arial" text-anchor="middle" fill="#fff">Demo Outfit</text>
-    <text x="350" y="840" font-size="28" font-family="Arial" text-anchor="middle" fill="#fff">UID ${uid}</text>
-  </svg>`;
-
-  return Buffer.from(svg).toString('base64');
-}
-
-function calculateCSRank(stars) {
-  stars = parseInt(stars || 0, 10);
-  if (stars >= 87) return `Heroic – ${stars - 87 + 1}★`;
-  if (stars >= 62) return `Diamond I – ${stars - 62 + 1}★`;
-  if (stars >= 37) return `Platinum I – ${stars - 37 + 1}★`;
-  if (stars >= 21) return `Gold I – ${stars - 21 + 1}★`;
-  if (stars >= 9) return `Silver I – ${stars - 9 + 1}★`;
-  return `Bronze I – ${stars + 1}★`;
-}
-
-function calculateBRRank(points) {
-  points = parseInt(points || 0, 10);
-  if (points >= 5500) return 'Elite Heroic';
-  if (points >= 3500) return 'Heroic';
-  if (points >= 2750) return 'Diamond';
-  if (points >= 2000) return 'Platinum';
-  if (points >= 1600) return 'Gold';
-  if (points >= 1300) return 'Silver';
-  if (points >= 1000) return 'Bronze';
-  return 'Unranked';
-}
+const PROFILE_API = process.env.FF_PROFILE_API || 'http://raw.sukhdaku.qzz.io/player/info';
 
 function validUid(uid) {
   return /^\d{6,20}$/.test(String(uid || ''));
 }
 
-module.exports = (req, res) => {
-  const { uid, bg = '1' } = req.query;
+function get(obj, path) {
+  return path.split('.').reduce((acc, key) => (acc == null ? undefined : acc[key]), obj);
+}
 
-  if (!validUid(uid)) {
-    return res.status(400).json({ status: 'error', message: 'UID must be 6-20 digits.' });
+function pick(obj, paths, fallback = null) {
+  for (const path of paths) {
+    const value = get(obj, path);
+    if (value !== undefined && value !== null && value !== '') return value;
   }
+  return fallback;
+}
 
-  const payload = mockAccount(uid, bg);
-  const basicInfo = payload.data.basicInfo;
+function normalizeProfilePayload(json) {
+  if (!json || typeof json !== 'object') return {};
+  if (json.data && typeof json.data === 'object') return json.data;
+  return json;
+}
 
-  res.status(200).json({
-    ...payload,
-    derived: {
-      brRank: calculateBRRank(basicInfo.rankingPoints),
-      csRank: calculateCSRank(basicInfo.csRankingPoints)
+async function fetchJson(url) {
+  const response = await fetch(url, {
+    headers: {
+      accept: 'application/json,text/plain,*/*',
+      'user-agent': 'Mozilla/5.0'
     }
   });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Profile upstream HTTP ${response.status}: ${text.slice(0, 200)}`);
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('Profile upstream did not return JSON.');
+  }
+}
+
+module.exports = async function handler(req, res) {
+  try {
+    const uid = String(req.query?.uid || '').trim();
+    const bg = String(req.query?.bg || '1');
+
+    if (!validUid(uid)) {
+      return res.status(400).json({ status: 'error', message: 'UID must be 6-20 digits.' });
+    }
+
+    const json = await fetchJson(`${PROFILE_API}?uid=${encodeURIComponent(uid)}`);
+    const src = normalizeProfilePayload(json);
+
+    const basicInfo = {
+      accountId: uid,
+      nickname: pick(src, ['profileInfo.nickname', 'basicInfo.nickname', 'playerData.nickname', 'nickname'], 'Unknown'),
+      region: pick(src, ['basicInfo.region', 'playerData.region', 'profileInfo.region', 'region'], 'Unknown'),
+      level: Number(pick(src, ['profileInfo.level', 'basicInfo.level', 'playerData.level'], 0)) || 0,
+      liked: Number(pick(src, ['basicInfo.liked', 'profileInfo.likes', 'socialInfo.likes'], 0)) || 0,
+      exp: Number(pick(src, ['basicInfo.exp', 'profileInfo.exp', 'playerData.exp'], 0)) || 0,
+      rankingPoints: Number(pick(src, ['basicInfo.rankingPoints', 'profileInfo.rankingPoints', 'profileInfo.rankPoints'], 0)) || 0,
+      csRankingPoints: Number(pick(src, ['basicInfo.csRankingPoints', 'profileInfo.csRankingPoints', 'profileInfo.csRankPoints'], 0)) || 0,
+      createAt: Number(pick(src, ['basicInfo.createAt', 'profileInfo.createAt', 'playerData.createAt'], 0)) || 0,
+      lastLoginAt: Number(pick(src, ['basicInfo.lastLoginAt', 'profileInfo.lastLoginAt', 'playerData.lastLoginAt'], 0)) || 0
+    };
+
+    const socialInfo = {
+      signature: pick(src, ['socialInfo.signature', 'profileInfo.signature', 'signature'], '')
+    };
+
+    const petInfo = {
+      id: pick(src, ['petInfo.id', 'petInfo.petId'], null),
+      level: Number(pick(src, ['petInfo.level', 'petInfo.petLevel'], 0)) || 0,
+      name: pick(src, ['petInfo.name', 'petInfo.petName'], '')
+    };
+
+    const clanBasicInfo = {
+      clanName: pick(src, ['clanBasicInfo.clanName', 'guildInfo.name', 'guildInfo.guildName'], ''),
+      clanId: pick(src, ['clanBasicInfo.clanId', 'guildInfo.id', 'guildInfo.guildId'], ''),
+      clanLevel: Number(pick(src, ['clanBasicInfo.clanLevel', 'guildInfo.level'], 0)) || 0,
+      memberNum: Number(pick(src, ['clanBasicInfo.memberNum', 'guildInfo.memberNum'], 0)) || 0,
+      capacity: Number(pick(src, ['clanBasicInfo.capacity', 'guildInfo.capacity'], 0)) || 0
+    };
+
+    const captainBasicInfo = {
+      nickname: pick(src, ['captainBasicInfo.nickname', 'guildInfo.captainName'], ''),
+      accountId: pick(src, ['captainBasicInfo.accountId', 'guildInfo.captainId'], ''),
+      level: Number(pick(src, ['captainBasicInfo.level', 'guildInfo.captainLevel'], 0)) || 0,
+      rankingPoints: Number(pick(src, ['captainBasicInfo.rankingPoints'], 0)) || 0,
+      csRankingPoints: Number(pick(src, ['captainBasicInfo.csRankingPoints'], 0)) || 0
+    };
+
+    const creditScoreInfo = {
+      creditScore: Number(pick(src, ['creditScoreInfo.creditScore', 'basicInfo.creditScore'], 100)) || 100
+    };
+
+    return res.status(200).json({
+      status: 'success',
+      region: basicInfo.region,
+      data: {
+        basicInfo,
+        profileInfo: src.profileInfo || {},
+        socialInfo,
+        clanBasicInfo,
+        captainBasicInfo,
+        petInfo,
+        creditScoreInfo,
+        playerData: src.playerData || {}
+      },
+      outfit_image_url: `/api/outfit-image?uid=${encodeURIComponent(uid)}&bg=${encodeURIComponent(bg)}`
+    });
+  } catch (error) {
+    console.error('complete-info.js fatal error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Failed to fetch account info.' });
+  }
 };
