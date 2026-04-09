@@ -5,8 +5,5 @@
   "type": "commonjs",
   "scripts": {
     "dev": "vercel dev"
-  },
-  "dependencies": {
-    "sharp": "^0.33.5"
   }
 }
