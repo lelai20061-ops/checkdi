@@ -124,144 +124,251 @@
   </div>
 
   <script>
-    const tabs = document.querySelectorAll('.tab');
-    const fullTab = document.getElementById('fullTab');
-    const regionTab = document.getElementById('regionTab');
+  const tabs = document.querySelectorAll('.tab');
+  const fullTab = document.getElementById('fullTab');
+  const regionTab = document.getElementById('regionTab');
 
-    tabs.forEach(btn => btn.addEventListener('click', () => {
-      tabs.forEach(b => b.classList.remove('active'));
+  tabs.forEach(btn => btn.addEventListener('click', () => {
+    tabs.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const isFull = btn.dataset.tab === 'full';
+    fullTab.classList.toggle('hidden', !isFull);
+    regionTab.classList.toggle('hidden', isFull);
+  }));
+
+  let selectedBg = '1';
+  document.querySelectorAll('.bg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.bg-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      const isFull = btn.dataset.tab === 'full';
-      fullTab.classList.toggle('hidden', !isFull);
-      regionTab.classList.toggle('hidden', isFull);
-    }));
-
-    let selectedBg = '1';
-    document.querySelectorAll('.bg-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.bg-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        selectedBg = btn.dataset.bg;
-      });
+      selectedBg = btn.dataset.bg;
     });
+  });
 
-    function esc(s) {
-      const d = document.createElement('div');
-      d.textContent = s ?? '';
-      return d.innerHTML;
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s ?? '';
+    return d.innerHTML;
+  }
+
+  function fmt(ts) {
+    const d = new Date((Number(ts) || 0) * 1000);
+    return isNaN(d.getTime()) ? 'Unknown' : d.toLocaleString();
+  }
+
+  function num(n) {
+    return Number(n || 0).toLocaleString();
+  }
+
+  function item(label, value) {
+    return '<div class="info-item"><div class="label">' + label + '</div><div class="value">' + value + '</div></div>';
+  }
+
+  function stat(label, value) {
+    return '<div class="stat"><div class="label">' + label + '</div><div class="value">' + value + '</div></div>';
+  }
+
+  function validUid(uid) {
+    return /^\d{6,20}$/.test(String(uid || '').trim());
+  }
+
+  function calculateCSRank(stars) {
+    stars = parseInt(stars || 0, 10);
+    if (stars >= 187) return `Elite Master – ${stars - 87 + 1}★`;
+    if (stars >= 137) return `Master – ${stars - 87 + 1}★`;
+    if (stars >= 112) return `Elite Heroic – ${stars - 87 + 1}★`;
+    if (stars >= 87) return `Heroic – ${stars - 87 + 1}★`;
+    if (stars >= 82) return `Diamond V – ${stars - 82 + 1}★`;
+    if (stars >= 77) return `Diamond IV – ${stars - 77 + 1}★`;
+    if (stars >= 72) return `Diamond III – ${stars - 72 + 1}★`;
+    if (stars >= 67) return `Diamond II – ${stars - 67 + 1}★`;
+    if (stars >= 62) return `Diamond I – ${stars - 62 + 1}★`;
+    if (stars >= 57) return `Platinum V – ${stars - 57 + 1}★`;
+    if (stars >= 52) return `Platinum IV – ${stars - 52 + 1}★`;
+    if (stars >= 47) return `Platinum III – ${stars - 47 + 1}★`;
+    if (stars >= 42) return `Platinum II – ${stars - 42 + 1}★`;
+    if (stars >= 37) return `Platinum I – ${stars - 37 + 1}★`;
+    if (stars >= 33) return `Gold IV – ${stars - 33 + 1}★`;
+    if (stars >= 29) return `Gold III – ${stars - 29 + 1}★`;
+    if (stars >= 25) return `Gold II – ${stars - 25 + 1}★`;
+    if (stars >= 21) return `Gold I – ${stars - 21 + 1}★`;
+    if (stars >= 17) return `Silver III – ${stars - 17 + 1}★`;
+    if (stars >= 13) return `Silver II – ${stars - 13 + 1}★`;
+    if (stars >= 9) return `Silver I – ${stars - 9 + 1}★`;
+    if (stars >= 6) return `Bronze III – ${stars - 6 + 1}★`;
+    if (stars >= 3) return `Bronze II – ${stars - 3 + 1}★`;
+    return `Bronze I – ${stars + 1}★`;
+  }
+
+  function calculateBRRank(points) {
+    points = parseInt(points || 0, 10);
+    if (points >= 10000) return 'Elite Master V';
+    if (points >= 9000) return 'Elite Master IV';
+    if (points >= 8000) return 'Elite Master III';
+    if (points >= 7100) return 'Master II';
+    if (points >= 6300) return 'Master I';
+    if (points >= 5500) return 'Elite Heroic V';
+    if (points >= 4900) return 'Elite Heroic IV';
+    if (points >= 4300) return 'Elite Heroic III';
+    if (points >= 3800) return 'Heroic II';
+    if (points >= 3500) return 'Heroic I';
+    if (points >= 2750) return 'Diamond';
+    if (points >= 2000) return 'Platinum';
+    if (points >= 1600) return 'Gold';
+    if (points >= 1300) return 'Silver';
+    if (points >= 1000) return 'Bronze';
+    return 'Unranked';
+  }
+
+  async function fetchJson(url) {
+    const r = await fetch(url);
+    const text = await r.text();
+    let data = {};
+
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error('API không trả JSON. Có thể route backend đang lỗi hoặc 404.');
     }
 
-    function fmt(ts) {
-      const d = new Date((Number(ts) || 0) * 1000);
-      return isNaN(d.getTime()) ? 'Unknown' : d.toLocaleString();
+    if (!r.ok) {
+      throw new Error(data.error || data.message || ('HTTP ' + r.status));
     }
 
-    function num(n) {
-      return Number(n || 0).toLocaleString();
-    }
+    return data;
+  }
 
-    function item(label, value) {
-      return '<div class="info-item"><div class="label">' + label + '</div><div class="value">' + value + '</div></div>';
-    }
+  function buildOutfitUrl(uid, bg) {
+    return '/api/outfit-image?uid=' + encodeURIComponent(uid) + '&bg=' + encodeURIComponent(bg) + '&t=' + Date.now();
+  }
 
-    function stat(label, value) {
-      return '<div class="stat"><div class="label">' + label + '</div><div class="value">' + value + '</div></div>';
-    }
+  document.getElementById('fetchFull').addEventListener('click', async () => {
+    const uid = document.getElementById('uid').value.trim();
+    const msg = document.getElementById('fullMessage');
+    const box = document.getElementById('fullResults');
 
-    document.getElementById('fetchFull').addEventListener('click', async () => {
-      const uid = document.getElementById('uid').value.trim();
-      const msg = document.getElementById('fullMessage');
-      const box = document.getElementById('fullResults');
-
-      msg.innerHTML = '<div class="message ok">Loading...</div>';
+    if (!validUid(uid)) {
+      msg.innerHTML = '<div class="message err">UID phải là 6-20 chữ số.</div>';
       box.classList.add('hidden');
+      return;
+    }
 
-      try {
-        const r = await fetch('/api/complete-info?uid=' + encodeURIComponent(uid) + '&bg=' + encodeURIComponent(selectedBg));
-        const data = await r.json();
-        if (!r.ok || data.status !== 'success') throw new Error(data.message || 'Request failed');
+    msg.innerHTML = '<div class="message ok">Đang lấy profile và render ảnh outfit...</div>';
+    box.classList.add('hidden');
 
-        const b = data.data.basicInfo || {};
-        const s = data.data.socialInfo || {};
-        const c = data.data.clanBasicInfo || {};
-        const p = data.data.petInfo || {};
-        const cr = data.data.creditScoreInfo || {};
-        const cap = data.data.captainBasicInfo || {};
+    try {
+      const fullData = await fetchJson(
+        '/api/complete-info?uid=' +
+        encodeURIComponent(uid) +
+        '&bg=' + encodeURIComponent(selectedBg)
+      );
 
-        box.innerHTML =
-          '<div class="message ok">Player found.</div>' +
-          '<div class="section-title">Player Information</div>' +
+      if (fullData.status !== 'success') {
+        throw new Error(fullData.message || 'Failed to fetch account info');
+      }
+
+      const payload = fullData.data || {};
+      const b = payload.basicInfo || {};
+      const s = payload.socialInfo || {};
+      const c = payload.clanBasicInfo || {};
+      const p = payload.petInfo || {};
+      const cr = payload.creditScoreInfo || {};
+      const cap = payload.captainBasicInfo || {};
+
+      const brRank = calculateBRRank(b.rankingPoints);
+      const csRank = calculateCSRank(b.csRankingPoints);
+      const outfitSrc = fullData.outfit_image_url || buildOutfitUrl(uid, selectedBg);
+
+      box.innerHTML =
+        '<div class="message ok">Player found.</div>' +
+        '<div class="section-title">Player Information</div>' +
+        '<div class="info-grid">' +
+          item('Player Name', esc(b.nickname || 'N/A')) +
+          item('UID', esc(b.accountId || uid)) +
+          item('Region', esc(b.region || 'Unknown')) +
+          item('Level', esc(String(b.level || 0))) +
+        '</div>' +
+        '<div class="section-title">Timeline</div>' +
+        '<div class="info-grid">' +
+          item('Account Created', esc(fmt(b.createAt))) +
+          item('Last Login', esc(fmt(b.lastLoginAt))) +
+        '</div>' +
+        '<div class="section-title">Rank Information</div>' +
+        '<div class="info-grid">' +
+          item('BR Rank', esc(brRank + ' (' + num(b.rankingPoints) + ' pts)')) +
+          item('CS Rank', esc(csRank + ' (' + num(b.csRankingPoints) + ' stars)')) +
+        '</div>' +
+        (c.clanName ? (
+          '<div class="section-title">Guild</div>' +
           '<div class="info-grid">' +
-            item('Player Name', esc(b.nickname || 'N/A')) +
-            item('UID', esc(b.accountId || uid)) +
-            item('Region', esc(b.region || 'N/A')) +
-            item('Level', esc(String(b.level || 0))) +
-          '</div>' +
-          '<div class="section-title">Timeline</div>' +
-          '<div class="info-grid">' +
-            item('Account Created', esc(fmt(b.createAt))) +
-            item('Last Login', esc(fmt(b.lastLoginAt))) +
-          '</div>' +
-          '<div class="section-title">Rank Information</div>' +
-          '<div class="info-grid">' +
-            item('BR Rank', esc(data.derived.brRank + ' (' + num(b.rankingPoints) + ' pts)')) +
-            item('CS Rank', esc(data.derived.csRank + ' (' + num(b.csRankingPoints) + ' stars)')) +
-          '</div>' +
-          (c.clanName ? '<div class="section-title">Guild</div><div class="info-grid">' +
             item('Guild Name', esc(c.clanName)) +
             item('Guild ID', esc(c.clanId || 'N/A')) +
             item('Guild Level', esc(String(c.clanLevel || 0))) +
             item('Members', esc((c.memberNum || 0) + '/' + (c.capacity || 0))) +
-          '</div>' : '') +
-          (cap.nickname ? '<div class="section-title">Guild Leader</div><div class="info-grid">' +
+          '</div>'
+        ) : '') +
+        (cap.nickname ? (
+          '<div class="section-title">Guild Leader</div>' +
+          '<div class="info-grid">' +
             item('Leader Name', esc(cap.nickname)) +
             item('Leader UID', esc(cap.accountId || 'N/A')) +
             item('Leader Level', esc(String(cap.level || 0))) +
-          '</div>' : '') +
-          '<div class="section-title">Statistics</div>' +
-          '<div class="stats">' +
-            stat('Likes', num(b.liked)) +
-            stat('Experience', num(b.exp)) +
-            stat('Honor', esc(String(cr.creditScore || 100))) +
-            stat('Pet Level', esc(String(p.level || 0))) +
-          '</div>' +
-          (s.signature ? '<div class="section-title">Signature</div><div class="info-item"><div class="value">' + esc(s.signature) + '</div></div>' : '') +
-          (data.outfit_image ? '<div class="outfit"><div class="section-title">Generated Outfit</div><img alt="outfit" src="data:image/svg+xml;base64,' + data.outfit_image + '" /></div>' : '');
+          '</div>'
+        ) : '') +
+        '<div class="section-title">Statistics</div>' +
+        '<div class="stats">' +
+          stat('Likes', num(b.liked)) +
+          stat('Experience', num(b.exp)) +
+          stat('Honor', esc(String(cr.creditScore || 100))) +
+          stat('Pet Level', esc(String(p.level || 0))) +
+        '</div>' +
+        (s.signature
+          ? '<div class="section-title">Signature</div><div class="info-item"><div class="value">' + esc(s.signature) + '</div></div>'
+          : '') +
+        '<div class="outfit">' +
+          '<div class="section-title">Generated Outfit</div>' +
+          '<img alt="outfit" src="' + outfitSrc + '" onerror="this.insertAdjacentHTML(\'afterend\', \'<div class=&quot;message err&quot;>Không tải được ảnh outfit.</div>\'); this.remove();">' +
+        '</div>';
 
-        box.classList.remove('hidden');
-        msg.innerHTML = '';
-      } catch (e) {
-        msg.innerHTML = '<div class="message err">' + esc(e.message) + '</div>';
-      }
-    });
+      box.classList.remove('hidden');
+      msg.innerHTML = '';
+    } catch (e) {
+      msg.innerHTML = '<div class="message err">' + esc(e.message) + '</div>';
+    }
+  });
 
-    document.getElementById('fetchRegion').addEventListener('click', async () => {
-      const uid = document.getElementById('regionUid').value.trim();
-      const msg = document.getElementById('regionMessage');
-      const box = document.getElementById('regionResults');
+  document.getElementById('fetchRegion').addEventListener('click', async () => {
+    const uid = document.getElementById('regionUid').value.trim();
+    const msg = document.getElementById('regionMessage');
+    const box = document.getElementById('regionResults');
 
-      msg.innerHTML = '<div class="message ok">Loading...</div>';
+    if (!validUid(uid)) {
+      msg.innerHTML = '<div class="message err">UID phải là 6-20 chữ số.</div>';
       box.classList.add('hidden');
+      return;
+    }
 
-      try {
-        const r = await fetch('/api/region?uid=' + encodeURIComponent(uid));
-        const data = await r.json();
-        if (!r.ok || !data.uid) throw new Error(data.error || 'Request failed');
+    msg.innerHTML = '<div class="message ok">Loading...</div>';
+    box.classList.add('hidden');
 
-        box.innerHTML =
-          '<div class="message ok">Region found.</div>' +
-          '<div class="info-grid">' +
-            item('UID', esc(data.uid)) +
-            item('Player Name', esc(data.nickname)) +
-            item('Region', esc(data.region)) +
-          '</div>';
+    try {
+      const data = await fetchJson('/api/region?uid=' + encodeURIComponent(uid));
 
-        box.classList.remove('hidden');
-        msg.innerHTML = '';
-      } catch (e) {
-        msg.innerHTML = '<div class="message err">' + esc(e.message) + '</div>';
-      }
-    });
-  </script>
+      box.innerHTML =
+        '<div class="message ok">Region found.</div>' +
+        '<div class="info-grid">' +
+          item('UID', esc(data.uid)) +
+          item('Player Name', esc(data.nickname)) +
+          item('Region', esc(data.region)) +
+          item('Server', esc(data.server || 'Unknown')) +
+        '</div>';
+
+      box.classList.remove('hidden');
+      msg.innerHTML = '';
+    } catch (e) {
+      msg.innerHTML = '<div class="message err">' + esc(e.message) + '</div>';
+    }
+  });
+</script>
 </body>
 </html>
