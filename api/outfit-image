@@ -1,0 +1,321 @@
+const sharp = require('sharp');
+
+const PROFILE_API = process.env.FF_PROFILE_API || 'http://raw.sukhdaku.qzz.io/player/info';
+const ICONS_BASE = 'https://raw.githubusercontent.com/I-SHOW-AKIRU200/AKIRU-ICONS/main/ICONS';
+const CHARACTER_BASE = 'https://raw.githubusercontent.com/sukhdaku/free-fire-chracter/main';
+const BACKGROUND_BASE = 'https://raw.githubusercontent.com/hamzaouiamin121-star/Free-Fire-Profile-Outfit/main/assets/backgrounds';
+
+const BACKGROUNDS = {
+  1: {
+    name: 'Neon Red',
+    remoteFile: 'bg3.png',
+    positions: {
+      '203': [55, 355],
+      '204': [55, 600],
+      '205': [180, 770],
+      '214': [855, 380],
+      '211_1': [730, 190],
+      '211_2': [145, 150],
+      avatar: [310, 200],
+      weapon: [680, 600],
+      pet: [725, 777]
+    },
+    sizes: {
+      '203': [130, 130],
+      '204': [130, 130],
+      '205': [130, 130],
+      '214': [130, 130],
+      '211_1': [170, 130],
+      '211_2': [170, 130],
+      avatar: [388, 660],
+      weapon: [300, 120],
+      pet: [100, 100]
+    }
+  },
+  2: {
+    name: 'Classic Blue',
+    remoteFile: 'bg1.png',
+    positions: {
+      '203': [55, 355],
+      '204': [55, 600],
+      '205': [180, 770],
+      '214': [855, 380],
+      '211_1': [730, 190],
+      '211_2': [145, 150],
+      avatar: [310, 200],
+      weapon: [680, 600],
+      pet: [725, 777]
+    },
+    sizes: {
+      '203': [130, 130],
+      '204': [130, 130],
+      '205': [130, 130],
+      '214': [130, 130],
+      '211_1': [170, 130],
+      '211_2': [170, 130],
+      avatar: [388, 660],
+      weapon: [300, 120],
+      pet: [100, 100]
+    }
+  },
+  3: {
+    name: 'Neon Purple',
+    remoteFile: 'bg2.png',
+    positions: {
+      '211_1': [190, 250],
+      '211_2': [190, 750],
+      '214': [190, 1250],
+      '203': [2250, 240],
+      '204': [2780, 240],
+      '205': [2780, 760],
+      avatar: [400, 200],
+      weapon: [2250, 1180],
+      pet: [2250, 760]
+    },
+    sizes: {
+      '203': [280, 280],
+      '204': [280, 280],
+      '205': [280, 280],
+      '214': [280, 280],
+      '211_1': [240, 240],
+      '211_2': [240, 240],
+      avatar: [1100, 1400],
+      weapon: [640, 440],
+      pet: [240, 240]
+    }
+  }
+};
+
+const backgroundCache = new Map();
+
+function validUid(uid) {
+  return /^\d{6,20}$/.test(String(uid || ''));
+}
+
+function get(obj, path) {
+  return path.split('.').reduce((acc, key) => (acc == null ? undefined : acc[key]), obj);
+}
+
+function pick(obj, paths, fallback = null) {
+  for (const path of paths) {
+    const value = get(obj, path);
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return fallback;
+}
+
+function normalizeProfilePayload(json) {
+  if (!json || typeof json !== 'object') return {};
+  if (json.data && typeof json.data === 'object') return json.data;
+  return json;
+}
+
+async function fetchJson(url) {
+  const response = await fetch(url, {
+    headers: {
+      accept: 'application/json,text/plain,*/*',
+      'user-agent': 'Mozilla/5.0'
+    }
+  });
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`Profile upstream HTTP ${response.status}: ${text.slice(0, 200)}`);
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('Profile upstream did not return JSON.');
+  }
+}
+
+async function fetchBuffer(url) {
+  const response = await fetch(url, {
+    headers: {
+      accept: 'image/*,*/*',
+      'user-agent': 'Mozilla/5.0'
+    }
+  });
+
+  if (!response.ok) return null;
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+async function getBackgroundBuffer(bg) {
+  const config = BACKGROUNDS[bg] || BACKGROUNDS[1];
+  const cacheKey = String(bg);
+
+  if (backgroundCache.has(cacheKey)) return backgroundCache.get(cacheKey);
+
+  const url = `${BACKGROUND_BASE}/${config.remoteFile}`;
+  const buffer = await fetchBuffer(url);
+  if (!buffer) throw new Error('Background download failed.');
+
+  backgroundCache.set(cacheKey, buffer);
+  return buffer;
+}
+
+function makeIconUrl(id) {
+  if (!id && id !== 0) return null;
+  const clean = String(id).replace(/\.(png|jpg|jpeg|webp)$/i, '');
+  return `${ICONS_BASE}/${clean}.png`;
+}
+
+function makeCharacterUrl(id) {
+  if (!id && id !== 0) return null;
+  const clean = String(id).replace(/\.(png|jpg|jpeg|webp)$/i, '');
+  return `${CHARACTER_BASE}/${clean}.png`;
+}
+
+function getAvatarId(profileData) {
+  const direct = pick(profileData, [
+    'profileInfo.avatarId',
+    'profileInfo.characterId',
+    'basicInfo.avatarId'
+  ]);
+  if (direct) return direct;
+
+  const skills = pick(profileData, ['profileInfo.EquippedSkills', 'profileInfo.equippedSkills'], []);
+  if (!Array.isArray(skills)) return 406;
+
+  for (const skill of skills) {
+    if (String(skill).endsWith('06')) return skill;
+  }
+  return 406;
+}
+
+function buildImageRequests(profileData, bgConfig) {
+  const clothes = pick(profileData, [
+    'profileInfo.equippedItems',
+    'profileInfo.EquippedItems'
+  ], []);
+
+  const weapons = pick(profileData, [
+    'playerData.weaponSkinShows',
+    'playerData.weaponSkins',
+    'profileInfo.weaponSkinShows'
+  ], []);
+
+  const petId = pick(profileData, ['petInfo.id', 'petInfo.petId']);
+  const avatarId = getAvatarId(profileData);
+
+  const imageRequests = [];
+  const overlayData = [];
+
+  let cnt211 = 1;
+  (Array.isArray(clothes) ? clothes : []).forEach((id) => {
+    if (!id) return;
+
+    const idStr = String(id);
+    const key = idStr.startsWith('211') ? `211_${cnt211++}` : idStr.substring(0, 3);
+    const pos = bgConfig.positions[key];
+    const size = bgConfig.sizes[key];
+    const url = makeIconUrl(id);
+
+    if (!pos || !size || !url) return;
+
+    imageRequests.push({ url, width: size[0], height: size[1] });
+    overlayData.push(pos);
+  });
+
+  const firstWeapon = Array.isArray(weapons) ? weapons[0] : null;
+  if (firstWeapon && bgConfig.positions.weapon && bgConfig.sizes.weapon) {
+    imageRequests.push({
+      url: makeIconUrl(firstWeapon),
+      width: bgConfig.sizes.weapon[0],
+      height: bgConfig.sizes.weapon[1]
+    });
+    overlayData.push(bgConfig.positions.weapon);
+  }
+
+  if (petId && bgConfig.positions.pet && bgConfig.sizes.pet) {
+    imageRequests.push({
+      url: makeIconUrl(petId),
+      width: bgConfig.sizes.pet[0],
+      height: bgConfig.sizes.pet[1]
+    });
+    overlayData.push(bgConfig.positions.pet);
+  }
+
+  if (bgConfig.positions.avatar && bgConfig.sizes.avatar) {
+    imageRequests.push({
+      url: makeCharacterUrl(avatarId),
+      width: bgConfig.sizes.avatar[0],
+      height: bgConfig.sizes.avatar[1]
+    });
+    overlayData.push(bgConfig.positions.avatar);
+  }
+
+  return {
+    imageRequests,
+    overlayData,
+    metadata: { avatarId, clothes, weapons, petId }
+  };
+}
+
+async function processRemoteImage(url, width, height) {
+  try {
+    const source = await fetchBuffer(url);
+    if (!source) return null;
+
+    return await sharp(source)
+      .resize(width, height, {
+        fit: 'contain',
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+        withoutEnlargement: false
+      })
+      .png({ compressionLevel: 3, force: true })
+      .toBuffer();
+  } catch {
+    return null;
+  }
+}
+
+module.exports = async function handler(req, res) {
+  try {
+    const uid = String(req.query?.uid || '').trim();
+    const bg = Number.parseInt(req.query?.bg || '1', 10);
+
+    if (!validUid(uid)) {
+      return res.status(400).json({ error: 'UID must be 6-20 digits.' });
+    }
+
+    const bgConfig = BACKGROUNDS[bg] || BACKGROUNDS[1];
+    const profileJson = await fetchJson(`${PROFILE_API}?uid=${encodeURIComponent(uid)}`);
+    const profileData = normalizeProfilePayload(profileJson);
+
+    const { imageRequests, overlayData, metadata } = buildImageRequests(profileData, bgConfig);
+    const loadedImages = await Promise.all(
+      imageRequests.map((item) => processRemoteImage(item.url, item.width, item.height))
+    );
+
+    const overlays = [];
+    for (let i = 0; i < loadedImages.length; i += 1) {
+      if (loadedImages[i] && overlayData[i]) {
+        overlays.push({
+          input: loadedImages[i],
+          left: overlayData[i][0],
+          top: overlayData[i][1]
+        });
+      }
+    }
+
+    const backgroundBuffer = await getBackgroundBuffer(bg);
+    const finalImage = await sharp(backgroundBuffer)
+      .composite(overlays)
+      .png({ compressionLevel: 3, force: true })
+      .toBuffer();
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('X-Avatar', String(metadata.avatarId || ''));
+    res.setHeader('X-Outfit-Items', String(Array.isArray(metadata.clothes) ? metadata.clothes.length : 0));
+    return res.status(200).send(finalImage);
+  } catch (error) {
+    console.error('outfit-image.js fatal error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to generate outfit image.' });
+  }
+};
