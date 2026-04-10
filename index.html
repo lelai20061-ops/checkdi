@@ -959,7 +959,7 @@ requestAnimationFrame(animate)
 }
 /* ===== LOAD FREE FIRE INFO ===== */
 
-let currentUID = currentUID || '';
+// (Xóa hoàn toàn dòng này, không cần thay thế)
 
 function formatDate(timestamp) {
   if (!timestamp) return '---';
@@ -1073,77 +1073,7 @@ animate()
     if(e.key === 'Escape') window.closePermission();
   });
 })();
-  /* ===== FREE FIRE INFO SYSTEM ===== */
 
-let currentUID = '';
-
-const originalCheckUID = checkUID;
-checkUID = function () {
-  const uid = document.getElementById('uidInput').value.trim();
-
-  if (!/^\d{8,12}$/.test(uid)) {
-    alert('Tài Khoản không tồn tại');
-    return;
-  }
-
-  currentUID = uid;
-  originalCheckUID();
-
-  document.getElementById('infoLoading').classList.remove('hidden');
-  document.getElementById('infoBox').classList.add('hidden');
-  document.getElementById('infoUID').innerText = uid;
-};
-
-function formatDate(timestamp) {
-  if (!timestamp) return '---';
-  const date = new Date(timestamp * 1000);
-  return date.toLocaleString('vi-VN');
-}
-
-async function loadAccountInfo() {
-  if (!currentUID) {
-    alert('Vui lòng nhập UID trước!');
-    return;
-  }
-
-  const loading = document.getElementById('infoLoading');
-  const infoBox = document.getElementById('infoBox');
-
-  loading.classList.remove('hidden');
-  loading.innerHTML = 'Đang tải thông tin tài khoản...';
-  infoBox.classList.add('hidden');
-
-  try {
-    const res = await fetch(`/api/complete-info?uid=${currentUID}&bg=1`);
-    const data = await res.json();
-
-    if (!res.ok || data.status === 'error') {
-      throw new Error(data.message || 'Không thể tải thông tin');
-    }
-
-    const info = data.data || {};
-    const basic = info.basicInfo || {};
-    const social = info.socialInfo || {};
-
-    document.getElementById('infoUID').innerText = basic.accountId || currentUID;
-    document.getElementById('infoName').innerText = basic.nickname || '---';
-    document.getElementById('infoLevel').innerText = basic.level ?? '---';
-    document.getElementById('infoLike').innerText = (basic.liked || 0).toLocaleString();
-    document.getElementById('infoCreate').innerText = formatDate(basic.createAt);
-    document.getElementById('infoLastLogin').innerText = formatDate(basic.lastLoginAt);
-    document.getElementById('infoBio').innerText = social.signature || '---';
-    document.getElementById('infoRegion').innerText =
-      basic.region || data.region || '---';
-
-    loading.classList.add('hidden');
-    infoBox.classList.remove('hidden');
-
-  } catch (err) {
-    loading.classList.remove('hidden');
-    loading.innerHTML = `❌ Lỗi: ${err.message}`;
-    console.error(err);
-  }
-}
 
 async function checkRegion() {
   if (!currentUID) {
