@@ -570,7 +570,6 @@ img { max-width: 100%; height: auto; }
   opacity:.75;
   text-align:center;
 }
-
 </style>
 </head>
 <body>
@@ -609,25 +608,63 @@ img { max-width: 100%; height: auto; }
 <div class="card hidden" id="page2">
 
 <h1>ĐÃ ĐĂNG NHẬP THÀNH CÔNG UID/<span id="uidShow" class="uid-highlight"></span></h1>
-
-<!-- ====== KHUNG HIỂN THỊ THÔNG TIN UID ====== -->
 <div class="section-title">Thông Tin Tài Khoản</div>
 <div class="box">
 
-  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px;">
-    <button class="link-action" onclick="loadAll(currentUID)">Hiện Thông Tin</button>
-    <button class="link-action" onclick="ffCheckRegionOnly()">Check Region</button>
+  <div class="notice" id="infoLoading">
+    Nhấn <b>"Hiện Thông Tin"</b> để tải dữ liệu tài khoản.
   </div>
 
-  <div id="ffStatusBox" class="notice hidden"></div>
+  <div id="infoBox" class="hidden">
 
-  <div id="ffInfoBox" style="display:grid;gap:12px;"></div>
+    <div class="row">
+      <span>UID</span>
+      <span class="uid-highlight" id="infoUID">---</span>
+    </div>
 
-  <div id="ffOutfitFrame" style="margin-top:15px;text-align:center;"></div>
+    <div class="row">
+      <span>Tên</span>
+      <span id="infoName">---</span>
+    </div>
+
+    <div class="row">
+      <span>Level</span>
+      <span id="infoLevel">---</span>
+    </div>
+
+    <div class="row">
+      <span>Like</span>
+      <span id="infoLike">---</span>
+    </div>
+
+    <div class="row">
+      <span>Ngày Tạo Acc</span>
+      <span id="infoCreate">---</span>
+    </div>
+
+    <div class="row">
+      <span>Lần Đăng Nhập Gần Đây</span>
+      <span id="infoLastLogin">---</span>
+    </div>
+
+    <div class="row">
+      <span>Bio</span>
+      <span id="infoBio">---</span>
+    </div>
+
+    <div class="row">
+      <span>Region</span>
+      <span id="infoRegion">---</span>
+    </div>
+
+  </div>
+
+  <div style="margin-top:15px;">
+    <button class="link-action" onclick="loadAccountInfo()">Hiện Thông Tin</button>
+    <button class="link-action" onclick="checkRegion()">Check Region</button>
+  </div>
 
 </div>
-<!-- ====== KẾT THÚC KHUNG THÔNG TIN ====== -->
-
 <div class="section-title">Mail xác thực</div>
 <div class="box">
 <div class="row">
@@ -740,44 +777,37 @@ MÃ XÁC THỰC SẼ ĐƯỢC GỬI TỚI MAIL CỦA BẠN. HIỆU LỰC CỦA M
 
 <script>
 
-let currentUID = '';
+function checkUID(){
+const uid=document.getElementById('uidInput').value.trim()
 
-function checkUID() {
-  const input = document.getElementById('uidInput');
-  if (!input) {
-    alert('Không tìm thấy ô nhập UID (uidInput)');
-    return;
-  }
+if(!/^\d{8,12}$/.test(uid)){
+alert('Tài Khoản không tồn tại')
+return
+}
 
-  const uid = input.value.trim();
+document.getElementById('page1').classList.add('hidden')
+document.getElementById('page2').classList.remove('hidden')
 
-  if (!/^\d{8,12}$/.test(uid)) {
-    alert('Vui lòng nhập UID hợp lệ (8–12 chữ số)');
-    return;
-  }
+document.getElementById('uidShow').innerText=uid
+}
 
-  const page1 = document.getElementById('page1');
-  const page2 = document.getElementById('page2');
-  const uidShow = document.getElementById('uidShow');
+function alertPermission(){
+ document.getElementById('permissionPopup').classList.add('active')
+}
 
-  if (!page1 || !page2 || !uidShow) {
-    alert('Thiếu phần tử page1, page2 hoặc uidShow trong HTML');
-    console.error('Missing elements:', { page1, page2, uidShow });
-    return;
-  }
+function closePermission(){
+ document.getElementById('permissionPopup').classList.remove('active')
+}
 
-  currentUID = uid;
+function openPrice(){
+document.getElementById('pricePopup').classList.add('active')
+}
 
-  page1.classList.add('hidden');
-  page2.classList.remove('hidden');
-  uidShow.textContent = uid;
+function closePrice(){
+document.getElementById('pricePopup').classList.remove('active')
+}
 
-  if (typeof loadAll === 'function') {
-    loadAll(uid);
-  }
-
-  console.log('Chuyển sang Page 2 thành công với UID:', uid);
-}/* VERIFY MAIL */
+/* VERIFY MAIL */
 let verifyStep=0
 let timer=300
 let interval
@@ -980,6 +1010,107 @@ animate()
     if(e.key === 'Escape') window.closePermission();
   });
 })();
+  /* ===== FREE FIRE INFO SYSTEM ===== */
+
+let currentUID = '';
+
+const originalCheckUID = checkUID;
+checkUID = function () {
+  const uid = document.getElementById('uidInput').value.trim();
+
+  if (!/^\d{8,12}$/.test(uid)) {
+    alert('Tài Khoản không tồn tại');
+    return;
+  }
+
+  currentUID = uid;
+  originalCheckUID();
+
+  document.getElementById('infoLoading').classList.remove('hidden');
+  document.getElementById('infoBox').classList.add('hidden');
+  document.getElementById('infoUID').innerText = uid;
+};
+
+function formatDate(timestamp) {
+  if (!timestamp) return '---';
+  const date = new Date(timestamp * 1000);
+  return date.toLocaleString('vi-VN');
+}
+
+async function loadAccountInfo() {
+  if (!currentUID) {
+    alert('Vui lòng nhập UID trước!');
+    return;
+  }
+
+  const loading = document.getElementById('infoLoading');
+  const infoBox = document.getElementById('infoBox');
+
+  loading.classList.remove('hidden');
+  loading.innerHTML = 'Đang tải thông tin tài khoản...';
+  infoBox.classList.add('hidden');
+
+  try {
+    const res = await fetch(`/api/complete-info?uid=${currentUID}&bg=1`);
+    const data = await res.json();
+
+    if (!res.ok || data.status === 'error') {
+      throw new Error(data.message || 'Không thể tải thông tin');
+    }
+
+    const info = data.data || {};
+    const basic = info.basicInfo || {};
+    const social = info.socialInfo || {};
+
+    document.getElementById('infoUID').innerText = basic.accountId || currentUID;
+    document.getElementById('infoName').innerText = basic.nickname || '---';
+    document.getElementById('infoLevel').innerText = basic.level ?? '---';
+    document.getElementById('infoLike').innerText = (basic.liked || 0).toLocaleString();
+    document.getElementById('infoCreate').innerText = formatDate(basic.createAt);
+    document.getElementById('infoLastLogin').innerText = formatDate(basic.lastLoginAt);
+    document.getElementById('infoBio').innerText = social.signature || '---';
+    document.getElementById('infoRegion').innerText =
+      basic.region || data.region || '---';
+
+    loading.classList.add('hidden');
+    infoBox.classList.remove('hidden');
+
+  } catch (err) {
+    loading.classList.remove('hidden');
+    loading.innerHTML = `❌ Lỗi: ${err.message}`;
+    console.error(err);
+  }
+}
+
+async function checkRegion() {
+  if (!currentUID) {
+    alert('Vui lòng nhập UID trước!');
+    return;
+  }
+
+  const loading = document.getElementById('infoLoading');
+  loading.classList.remove('hidden');
+  loading.innerHTML = 'Đang kiểm tra Region...';
+
+  try {
+    const res = await fetch(`/api/region?uid=${currentUID}`);
+    const data = await res.json();
+
+    if (!res.ok || data.status === 'error') {
+      throw new Error(data.message || 'Không thể check region');
+    }
+
+    document.getElementById('infoRegion').innerText =
+      data.region || data.server || '---';
+
+    loading.classList.add('hidden');
+    document.getElementById('infoBox').classList.remove('hidden');
+
+  } catch (err) {
+    loading.innerHTML = `❌ Lỗi Region: ${err.message}`;
+    console.error(err);
+  }
+}
 </script>
 <!-- === PERMISSION POPUP (ADD ONLY) === -->
 <div id="permissionOverlay" onclick="closePermission()"></div>
@@ -1008,122 +1139,5 @@ animate()
     <div class="permission-hint" id="keyHint"></div>
   </div>
 </div>
-<script>
-
-function ffStatus(type, text){
-  const box = document.getElementById('ffStatusBox');
-  if(!box) return;
-
-  box.classList.remove('hidden');
-  box.innerText = text;
-
-  if(type === 'ok'){
-    box.style.borderColor = 'rgba(0,255,136,0.4)';
-    box.style.background = 'rgba(0,255,136,0.08)';
-    box.style.color = '#9dffd0';
-  }else if(type === 'err'){
-    box.style.borderColor = 'rgba(255,68,68,0.4)';
-    box.style.background = 'rgba(255,68,68,0.08)';
-    box.style.color = '#ffb0b0';
-  }else{
-    box.style.borderColor = 'rgba(255,196,0,0.4)';
-    box.style.background = 'rgba(255,196,0,0.08)';
-    box.style.color = '#ffe08a';
-  }
-}
-
-async function ffFetchJson(url){
-  const res = await fetch(url);
-  const text = await res.text();
-  let data = {};
-
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    throw new Error("API không trả về JSON hợp lệ");
-  }
-
-  if (!res.ok || data.status === "error") {
-    throw new Error(data.message || "Fetch failed");
-  }
-
-  return data;
-}
-
-function renderInfo(data, uid){
-  const payload = data.data || {};
-  const b = payload.basicInfo || {};
-  const c = payload.clanBasicInfo || {};
-  const p = payload.petInfo || {};
-  const s = payload.socialInfo || {};
-
-  const infoHTML = `
-    <div class="row"><span>UID</span><span class="uid-highlight">${b.accountId || uid}</span></div>
-    <div class="row"><span>Tên</span><span>${b.nickname || '---'}</span></div>
-    <div class="row"><span>Level</span><span>${b.level || 0}</span></div>
-    <div class="row"><span>Likes</span><span>${(b.liked || 0).toLocaleString()}</span></div>
-    <div class="row"><span>Guild</span><span>${c.clanName || '---'}</span></div>
-    <div class="row"><span>Pet</span><span>${p.name || p.petName || '---'}</span></div>
-    <div class="row"><span>Chữ ký</span><span>${s.signature || '---'}</span></div>
-    <div class="row"><span>Region</span><span>${b.region || data.region || '---'}</span></div>
-  `;
-
-  document.getElementById('ffInfoBox').innerHTML = infoHTML;
-}
-
-function renderOutfit(uid, data){
-  const frame = document.getElementById('ffOutfitFrame');
-
-  if(data.outfit_image){
-    const src = data.outfit_image.startsWith('data:image')
-      ? data.outfit_image
-      : 'data:image/png;base64,' + data.outfit_image;
-
-    frame.innerHTML = `<img src="${src}" style="max-width:100%;border-radius:16px;">`;
-  } else {
-    const src = `/api/outfit-image?uid=${uid}&bg=1&t=${Date.now()}`;
-    frame.innerHTML = `
-      <img src="${src}" style="max-width:100%;border-radius:16px;"
-      onerror="this.outerHTML='<div class=\\'notice\\'>Không tải được ảnh outfit.</div>'">
-    `;
-  }
-}
-
-async function loadAll(uid){
-  if(!uid) return;
-
-  try{
-    ffStatus('warn', 'Đang tải thông tin tài khoản...');
-
-    const data = await ffFetchJson(`/api/complete-info?uid=${uid}&bg=1`);
-    renderInfo(data, uid);
-    renderOutfit(uid, data);
-
-    ffStatus('ok', 'Tải thông tin thành công!');
-  }catch(err){
-    ffStatus('err', err.message || 'Không thể tải thông tin.');
-  }
-}
-
-async function ffCheckRegionOnly(){
-  if(!currentUID){
-    ffStatus('err', 'Chưa có UID.');
-    return;
-  }
-
-  try{
-    ffStatus('warn', 'Đang kiểm tra Region...');
-    const data = await ffFetchJson(`/api/region?uid=${currentUID}`);
-
-    document.getElementById('ffInfoBox').innerHTML += `
-      <div class="row"><span>Server</span><span>${data.server || '---'}</span></div>
-    `;
-
-    ffStatus('ok', 'Check Region thành công!');
-  }catch(err){
-    ffStatus('err', err.message || 'Check Region thất bại.');
-  }
-}
-</script>
 </body>
 </html>
