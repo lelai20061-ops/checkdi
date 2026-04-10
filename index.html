@@ -570,6 +570,10 @@ img { max-width: 100%; height: auto; }
   opacity:.75;
   text-align:center;
 }
+  @keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 </style>
 </head>
 <body>
@@ -611,57 +615,34 @@ img { max-width: 100%; height: auto; }
 <div class="section-title">Thông Tin Tài Khoản</div>
 <div class="box">
 
-  <div class="notice" id="infoLoading">
-    Nhấn <b>"Hiện Thông Tin"</b> để tải dữ liệu tài khoản.
+  <!-- Loading -->
+  <div id="infoLoading" class="notice" style="text-align:center;">
+    <div style="margin-bottom:10px;">Đang tải thông tin tài khoản...</div>
+    <div style="
+      width:40px;
+      height:40px;
+      border:4px solid rgba(255,255,255,0.2);
+      border-top:4px solid #f5c542;
+      border-radius:50%;
+      margin:0 auto;
+      animation:spin 1s linear infinite;">
+    </div>
   </div>
 
+  <!-- Thông tin tài khoản -->
   <div id="infoBox" class="hidden">
+    <div class="row"><span>UID</span><span class="uid-highlight" id="infoUID">---</span></div>
+    <div class="row"><span>Tên</span><span id="infoName">---</span></div>
+    <div class="row"><span>Level</span><span id="infoLevel">---</span></div>
+    <div class="row"><span>Like</span><span id="infoLike">---</span></div>
+    <div class="row"><span>Ngày Tạo Acc</span><span id="infoCreate">---</span></div>
+    <div class="row"><span>Lần Đăng Nhập Gần Đây</span><span id="infoLastLogin">---</span></div>
+    <div class="row"><span>Bio</span><span id="infoBio">---</span></div>
+    <div class="row"><span>Region</span><span id="infoRegion">---</span></div>
 
-    <div class="row">
-      <span>UID</span>
-      <span class="uid-highlight" id="infoUID">---</span>
+    <div style="margin-top:15px;text-align:right;">
+      <button class="link-action" onclick="reloadAccountInfo()">Load Lại Thông Tin</button>
     </div>
-
-    <div class="row">
-      <span>Tên</span>
-      <span id="infoName">---</span>
-    </div>
-
-    <div class="row">
-      <span>Level</span>
-      <span id="infoLevel">---</span>
-    </div>
-
-    <div class="row">
-      <span>Like</span>
-      <span id="infoLike">---</span>
-    </div>
-
-    <div class="row">
-      <span>Ngày Tạo Acc</span>
-      <span id="infoCreate">---</span>
-    </div>
-
-    <div class="row">
-      <span>Lần Đăng Nhập Gần Đây</span>
-      <span id="infoLastLogin">---</span>
-    </div>
-
-    <div class="row">
-      <span>Bio</span>
-      <span id="infoBio">---</span>
-    </div>
-
-    <div class="row">
-      <span>Region</span>
-      <span id="infoRegion">---</span>
-    </div>
-
-  </div>
-
-  <div style="margin-top:15px;">
-    <button class="link-action" onclick="loadAccountInfo()">Hiện Thông Tin</button>
-    <button class="link-action" onclick="checkRegion()">Check Region</button>
   </div>
 
 </div>
@@ -777,20 +758,34 @@ MÃ XÁC THỰC SẼ ĐƯỢC GỬI TỚI MAIL CỦA BẠN. HIỆU LỰC CỦA M
 
 <script>
 
+let currentUID = '';
+
 function checkUID(){
-const uid=document.getElementById('uidInput').value.trim()
+  const uid = document.getElementById('uidInput').value.trim();
 
-if(!/^\d{8,12}$/.test(uid)){
-alert('Tài Khoản không tồn tại')
-return
+  if(!/^\d{8,12}$/.test(uid)){
+    alert('Tài Khoản không tồn tại');
+    return;
+  }
+
+  currentUID = uid;
+
+  document.getElementById('page1').classList.add('hidden');
+  document.getElementById('page2').classList.remove('hidden');
+  document.getElementById('uidShow').innerText = uid;
+
+  // Hiển thị loading và ẩn thông tin cũ
+  const loading = document.getElementById('infoLoading');
+  const infoBox = document.getElementById('infoBox');
+
+  if (loading && infoBox) {
+    loading.classList.remove('hidden');
+    infoBox.classList.add('hidden');
+  }
+
+  // Tự động load thông tin khi vào page 2
+  loadAccountInfo();
 }
-
-document.getElementById('page1').classList.add('hidden')
-document.getElementById('page2').classList.remove('hidden')
-
-document.getElementById('uidShow').innerText=uid
-}
-
 function alertPermission(){
  document.getElementById('permissionPopup').classList.add('active')
 }
@@ -962,7 +957,75 @@ drawLinks()
 
 requestAnimationFrame(animate)
 }
+/* ===== LOAD FREE FIRE INFO ===== */
 
+let currentUID = currentUID || '';
+
+function formatDate(timestamp) {
+  if (!timestamp) return '---';
+  const date = new Date(timestamp * 1000);
+  return date.toLocaleString('vi-VN');
+}
+
+async function loadAccountInfo() {
+  if (!currentUID) return;
+
+  const loading = document.getElementById('infoLoading');
+  const infoBox = document.getElementById('infoBox');
+
+  if (loading) {
+    loading.classList.remove('hidden');
+    loading.innerHTML = `
+      <div style="margin-bottom:10px;">Đang tải thông tin tài khoản...</div>
+      <div style="
+        width:40px;height:40px;
+        border:4px solid rgba(255,255,255,0.2);
+        border-top:4px solid #f5c542;
+        border-radius:50%;
+        margin:0 auto;
+        animation:spin 1s linear infinite;">
+      </div>`;
+  }
+
+  if (infoBox) infoBox.classList.add('hidden');
+
+  try {
+    const res = await fetch(`/api/complete-info?uid=${currentUID}&bg=1`);
+    const data = await res.json();
+
+    if (!res.ok || data.status === 'error') {
+      throw new Error(data.message || 'Không thể tải thông tin');
+    }
+
+    const info = data.data || {};
+    const basic = info.basicInfo || {};
+    const social = info.socialInfo || {};
+
+    document.getElementById('infoUID').innerText = basic.accountId || currentUID;
+    document.getElementById('infoName').innerText = basic.nickname || '---';
+    document.getElementById('infoLevel').innerText = basic.level ?? '---';
+    document.getElementById('infoLike').innerText = (basic.liked || 0).toLocaleString();
+    document.getElementById('infoCreate').innerText = formatDate(basic.createAt);
+    document.getElementById('infoLastLogin').innerText = formatDate(basic.lastLoginAt);
+    document.getElementById('infoBio').innerText = social.signature || '---';
+    document.getElementById('infoRegion').innerText =
+      basic.region || data.region || '---';
+
+    if (loading) loading.classList.add('hidden');
+    if (infoBox) infoBox.classList.remove('hidden');
+
+  } catch (err) {
+    if (loading) {
+      loading.classList.remove('hidden');
+      loading.innerHTML = `❌ Không tải được dữ liệu: ${err.message}`;
+    }
+    console.error(err);
+  }
+}
+
+function reloadAccountInfo() {
+  loadAccountInfo();
+}
 animate()
 /* === PERMISSION POPUP JS (ADD ONLY) === */
 (function(){
