@@ -740,26 +740,44 @@ MÃ XÁC THỰC SẼ ĐƯỢC GỬI TỚI MAIL CỦA BẠN. HIỆU LỰC CỦA M
 
 <script>
 
-function checkUID(){
 let currentUID = '';
 
-function checkUID(){
-  const uid = document.getElementById('uidInput').value.trim();
+function checkUID() {
+  const input = document.getElementById('uidInput');
+  if (!input) {
+    alert('Không tìm thấy ô nhập UID (uidInput)');
+    return;
+  }
 
-  if(!/^\d{8,12}$/.test(uid)){
-    alert('UID không hợp lệ! Vui lòng nhập từ 8 đến 12 chữ số.');
+  const uid = input.value.trim();
+
+  if (!/^\d{8,12}$/.test(uid)) {
+    alert('Vui lòng nhập UID hợp lệ (8–12 chữ số)');
+    return;
+  }
+
+  const page1 = document.getElementById('page1');
+  const page2 = document.getElementById('page2');
+  const uidShow = document.getElementById('uidShow');
+
+  if (!page1 || !page2 || !uidShow) {
+    alert('Thiếu phần tử page1, page2 hoặc uidShow trong HTML');
+    console.error('Missing elements:', { page1, page2, uidShow });
     return;
   }
 
   currentUID = uid;
 
-  document.getElementById('page1').classList.add('hidden');
-  document.getElementById('page2').classList.remove('hidden');
-  document.getElementById('uidShow').innerText = uid;
+  page1.classList.add('hidden');
+  page2.classList.remove('hidden');
+  uidShow.textContent = uid;
 
-  loadAll(uid); // Tự động hiển thị thông tin khi vào Page 2
-}
-/* VERIFY MAIL */
+  if (typeof loadAll === 'function') {
+    loadAll(uid);
+  }
+
+  console.log('Chuyển sang Page 2 thành công với UID:', uid);
+}/* VERIFY MAIL */
 let verifyStep=0
 let timer=300
 let interval
@@ -991,7 +1009,6 @@ animate()
   </div>
 </div>
 <script>
-let currentUID = '';
 
 function ffStatus(type, text){
   const box = document.getElementById('ffStatusBox');
