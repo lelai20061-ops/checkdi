@@ -27,12 +27,7 @@ async function fetchText(url) {
   });
 
   const text = await response.text();
-
-  return {
-    ok: response.ok,
-    status: response.status,
-    text
-  };
+  return { ok: response.ok, status: response.status, text };
 }
 
 function normalizeToExpectedShape(uid, raw) {
@@ -107,14 +102,23 @@ function normalizeToExpectedShape(uid, raw) {
   };
 }
 
-module.exports = async function handler(req, res) {
+module.exports = async (req, res) => {
+  // CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   try {
-    const uid = String(req.query?.uid || '').trim();
+    const { uid } = req.query;
 
     if (!validUid(uid)) {
       return res.status(400).json({
         status: 'error',
-        message: 'UID must be 6-20 digits.'
+        message: 'Invalid UID. UID must be 6–20 digits.'
       });
     }
 
